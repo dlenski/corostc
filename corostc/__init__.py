@@ -4,7 +4,9 @@ from os import path
 from hashlib import md5
 from itertools import count
 from enum import IntEnum
-from io import RawIOBase
+from io import RawIOBase, BytesIO
+from tempfile import NamedTemporaryFile
+from gzip import GzipFile
 
 import requests
 
@@ -101,17 +103,31 @@ class CorosTCClient():
         r2.raise_for_status()
         return (url, r2.content)
 
-    def upload_activity(self, activity_file: RawIOBase):
-        r = self.session.post(
-            COROS_API_BASE + f'/activity/fit/import',
-            files=dict(
-                jsonParameter=(None, json.dumps(dict(source=1, timezone=-32))),
-                sportData=(path.basename(activity_file.name), activity_file.read(), 'application/octet-stream')
-            ))
+    def upload_activity(self, activity_file: RawIOBase, compress: bool = True):
+        contents = activity_file.read()
+        fn = path.basename(activity_file.name)
 
-        # FIXME: is this actually useful?
-        # should we try to find the activity's ID instead? how?
-        return self._coros_raise_or_json(r)['data']
+        if compress:
+            ntf = NamedTemporaryFile(suffix='.zip')
+            with GzipFile(filename=fn, fileobj=ntf, mode='wb') as gzf:
+                gzf.write(contents)
+            ntf.seek(0)
+            upload_file = ntf
+            fn += '.gz'
+        else:
+            upload_file = BytesIO(contents)
+
+        with activity_file:
+            r = self.session.post(
+                COROS_API_BASE + f'/activity/fit/import',
+                files=dict(
+                    jsonParameter=(None, json.dumps(dict(source=1, timezone=-32))),
+                    sportData=(fn, upload_file.read(), 'application/octet-stream')
+                ))
+            # FIXME: is this actually useful at all?
+            j = self._coros_raise_or_json(r)
+
+    return j
 
     def delete_activity(self, activity_id: str):
         r = self.session.get(COROS_API_BASE + '/activity/delete',
