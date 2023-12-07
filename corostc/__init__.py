@@ -101,14 +101,22 @@ class CorosTCClient():
 
     def download_activity(self, activity_id: str, sport_type: int = CorosSportType.Run,
                           file_type: CorosFileType = CorosFileType.FIT):
-        r = self.session.get(COROS_API_BASE + '/activity/detail/download',
-                             params=dict(labelId=activity_id, sportType=int(sport_type), fileType=int(file_type)))
-        j = self._coros_raise_or_json(r)
+        url = self.get_download_url(activity_id, sport_type, file_type)
+        r = self.session.get(url)
+        r.raise_for_status()
+        return r.content
 
-        url = j['data']['fileUrl']
-        r2 = self.session.get(url)
-        r2.raise_for_status()
-        return (url, r2.content)
+    def get_download_url(self, activity_id: str, sport_type: int = CorosSportType.Run,
+                         file_type: CorosFileType = CorosFileType.FIT):
+        r = self.session.get(
+            COROS_API_BASE + '/activity/detail/download',
+            params=dict(
+                labelId=str(activity_id),
+                sportType=int(sport_type),
+                fileType=int(file_type),
+            ))
+        j = self._coros_raise_or_json(r)
+        return j['data'].get('fileUrl')
 
     def upload_activity(self, activity_file: RawIOBase, compress: bool = True):
         contents = activity_file.read()
