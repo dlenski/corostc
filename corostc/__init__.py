@@ -74,6 +74,7 @@ class CorosTCClient():
 
     def list_activities(self, batch_size: int = 100):
         activities = []
+        total = None
         for page in count(1):
             start_index = batch_size * (page - 1)
             end_index = start_index + batch_size - 1
@@ -88,6 +89,12 @@ class CorosTCClient():
                                    if k in ('labelId', 'sportType', 'startTime', 'endTime', 'name'))
                               for a in j['dataList'])
             if end_index >= j['count']:
+
+            if total is None:
+                total = j['count']
+            assert total == j['count'], \
+                f"total activity count changed from {total} to {j['count']} while fetching activities"
+            if end_index >= total:
                 break
 
         return activities
