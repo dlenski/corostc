@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date, datetime, timezone, timedelta
 from os import path
 from hashlib import md5
 from itertools import count
@@ -84,11 +85,18 @@ class CorosTCClient():
                                  params=dict(size=batch_size, pageNumber=page))
             j = self._coros_raise_or_json(r)['data']
 
-            activities.extend(dict((k, (CorosSportType(v) if k=='sportType' else v))
-                                   for (k, v) in a.items()
-                                   if k in ('labelId', 'sportType', 'startTime', 'endTime', 'name'))
-                              for a in j['dataList'])
-            if end_index >= j['count']:
+            for a in j['dataList']:
+                try:
+                    a['sportType'] = CorosSportType(a['sportType'])
+                except ValueError:
+                    pass   # Unknown sport type integer. Just leave it alone.
+                a['date'] = date(year=a['date'] // 10000, month=a['date'] // 100 % 100, day=a['date'] % 100)
+                stz = a['startTimezone'] = timezone(timedelta(minutes=a['startTimezone']*15))
+                etz = a['endTimezone'] = timezone(timedelta(minutes=a['endTimezone']*15))
+                a['startTime'] = datetime.fromtimestamp(a['startTime'], stz)
+                a['endTime'] = datetime.fromtimestamp(a['endTime'], etz)
+                a.update({k: bool(v) for k, v in a.items() if k.startswith(('has', 'is'))})
+                activities.append(a)
 
             if total is None:
                 total = j['count']
