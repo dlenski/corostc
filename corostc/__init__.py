@@ -9,6 +9,10 @@ from io import RawIOBase, BytesIO
 from tempfile import NamedTemporaryFile
 from gzip import GzipFile
 
+try:
+    import fitparse
+except ImportError:
+    fitparse = None
 import requests
 
 COROS_API_BASE = 'https://teamapi.coros.com'
@@ -127,30 +131,48 @@ class CorosTCClient():
         return j['data'].get('fileUrl')
 
     def upload_activity(self, activity_file: RawIOBase, compress: bool = True):
-        contents = activity_file.read()
         fn = path.basename(activity_file.name)
+        buf = BytesIO(activity_file.read())
 
         if compress:
-            ntf = NamedTemporaryFile(suffix='.zip')
-            with GzipFile(filename=fn, fileobj=ntf, mode='wb') as gzf:
-                gzf.write(contents)
-            ntf.seek(0)
-            upload_file = ntf
+            upload_file = BytesIO()
+            with GzipFile(fileobj=upload_file, mode='wb', filename=fn) as gzf:
+                gzf.write(buf.read())
+            upload_file.seek(0)
             fn += '.gz'
         else:
-            upload_file = BytesIO(contents)
+            upload_file = buf
 
-        with activity_file:
-            r = self.session.post(
-                COROS_API_BASE + f'/activity/fit/import',
-                files=dict(
-                    jsonParameter=(None, json.dumps(dict(source=1, timezone=-32))),
-                    sportData=(fn, upload_file.read(), 'application/octet-stream')
-                ))
-            # FIXME: is this actually useful at all?
-            j = self._coros_raise_or_json(r)
+        r = self.session.post(
+            COROS_API_BASE + '/activity/fit/import',
+            files=dict(
+                jsonParameter=(None, '{}'),   # website sends {'source': 123456, 'timezone': -32}
+                sportData=(fn, upload_file.read(), 'application/octet-stream')
+            ))
 
-    return j
+        # FIXME: is anything here meaningful or useful? Is there a better
+        # way to figure out the 'labelId' of the uploaded activity?
+        self._coros_raise_or_json(r)
+
+        if not fitparse:
+            log.warning('Cannot determine activity ID in Coros TC Without python-fitparse')
+            return None
+
+        # Find the start time from the uploaded FIT file
+        buf.seek(0)
+        act = fitparse.FitFile(buf)
+        act.parse()
+        act_sess = next(act.get_messages(name='session'))
+        start_time = act_sess.get_value('start_time')
+        if start_time.tzinfo is None:  # Tacit UTC timezone
+            start_time = start_time.replace(tzinfo=timezone.utc)
+        start_time = start_time.timestamp()
+
+        # Relisting all activities and find the one with a matching 'labelId'
+        try:
+            return next(a['labelId'] for a in self.list_activities() if abs(a['startTime'] - start_time) < 1.0)
+        except StopIteration:
+            log.warning(f'Uploaded FIT file with start_time of {start_time}, but cannot find a matching activity in Coros TC')
 
     def delete_activity(self, activity_id: str):
         r = self.session.get(COROS_API_BASE + '/activity/delete',

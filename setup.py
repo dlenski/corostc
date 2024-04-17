@@ -21,4 +21,7 @@ setup(
     license='GPL v3 or later',
     packages=['corostc'],
     install_requires=['requests'],
+    extras_require={
+        'fitparse': ['fitparse'],
+    },
 )
