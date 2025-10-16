@@ -21,8 +21,8 @@ def main():
     client = CorosTCClient(args.username, args.password)
     client.connect()
     for fitfile in args.fitfile:
-        j = client.upload_activity(open(fitfile, 'rb'), compress=False)
-        pprint(j)
+        url = client.upload_activity(open(fitfile, 'rb'), compress=False)
+        print(f'{fitfile!r} -> {"<couldn't determine URL>" if url is None else url}')
     else:
         print(f'Uploaded {len(args.fitfile)} files')
 

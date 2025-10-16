@@ -7,6 +7,7 @@ from itertools import count
 from enum import IntEnum
 from io import RawIOBase, BytesIO
 from tempfile import NamedTemporaryFile
+from typing import Optional, Union
 from gzip import GzipFile
 
 try:
@@ -15,6 +16,7 @@ except ImportError:
     fitparse = None
 import requests
 
+COROS_WEB_BASE = 'https://training.coros.com'
 COROS_API_BASE = 'https://teamapi.coros.com'
 CorosFileType = IntEnum('CorosFileType', dict(CSV=0, GPX=1, KML=2, TCX=3, FIT=4))
 CorosSportType = IntEnum('CorosSportType', dict(
@@ -77,7 +79,9 @@ class CorosTCClient():
         j = self._coros_raise_or_json(r)
         self.session.headers['accessToken'] = j['data']['accessToken']
 
-    def list_activities(self, batch_size: int = 100):
+    def list_activities(self, batch_size: int = 100,
+                        start: Optional[Union[date, datetime]] = None,
+                        end: Optional[Union[date, datetime]] = None):
         activities = []
         total = None
         for page in count(1):
@@ -86,21 +90,23 @@ class CorosTCClient():
 
             log.debug("fetching page %d of activities (%d through %d) ...", page, start_index, end_index)
             r = self.session.get(COROS_API_BASE + '/activity/query',
-                                 params=dict(size=batch_size, pageNumber=page))
+                                 params=dict(size=batch_size, pageNumber=page,
+                                             startDay=start and start.strftime('%Y%m%d'),
+                                             endDay=end and end.strftime('%Y%m%d')))
             j = self._coros_raise_or_json(r)['data']
 
             for a in j['dataList']:
                 try:
-                    a['sportType'] = CorosSportType(a['sportType'])
+                    a['_sportType'] = CorosSportType(a['sportType'])
                 except ValueError:
                     pass   # Unknown sport type integer. Just leave it alone.
-                a['date'] = date(year=a['date'] // 10000, month=a['date'] // 100 % 100, day=a['date'] % 100)
-                stz = a['startTimezone'] = timezone(timedelta(minutes=a['startTimezone']*15))
-                etz = a['endTimezone'] = timezone(timedelta(minutes=a['endTimezone']*15))
-                a['startTime'] = datetime.fromtimestamp(a['startTime'], stz)
-                a['endTime'] = datetime.fromtimestamp(a['endTime'], etz)
+                a['_date'] = date(year=a['date'] // 10000, month=a['date'] // 100 % 100, day=a['date'] % 100)
+                stz = a['_startTimezone'] = timezone(timedelta(minutes=a['startTimezone']*15))
+                etz = a['_endTimezone'] = timezone(timedelta(minutes=a['endTimezone']*15))
+                a['_startTime'] = datetime.fromtimestamp(a['startTime'], stz)
+                a['_endTime'] = datetime.fromtimestamp(a['endTime'], etz)
                 a.update({k: bool(v) for k, v in a.items() if k.startswith(('has', 'is'))})
-                activities.append(a)
+                yield a
 
             if total is None:
                 total = j['count']
@@ -108,8 +114,6 @@ class CorosTCClient():
                 f"total activity count changed from {total} to {j['count']} while fetching activities"
             if end_index >= total:
                 break
-
-        return activities
 
     def download_activity(self, activity_id: str, sport_type: int = CorosSportType.Run,
                           file_type: CorosFileType = CorosFileType.FIT):
@@ -160,19 +164,28 @@ class CorosTCClient():
 
         # Find the start time from the uploaded FIT file
         buf.seek(0)
-        act = fitparse.FitFile(buf)
-        act.parse()
-        act_sess = next(act.get_messages(name='session'))
-        start_time = act_sess.get_value('start_time')
-        if start_time.tzinfo is None:  # Tacit UTC timezone
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        start_time = start_time.timestamp()
-
-        # Relisting all activities and find the one with a matching 'labelId'
         try:
-            return next(a['labelId'] for a in self.list_activities() if abs(a['startTime'] - start_time) < 1.0)
+            act = fitparse.FitFile(buf)
+            act.parse()
+            act_sess = next(act.get_messages(name='session'))
+            _start_time = act_sess.get_value('start_time')
+        except Exception as exc:
+            log.warning('Cannot determine FIT file start time', exc_info=exc)
+            return None
+        assume_utc = _start_time.tzinfo is None
+        if assume_utc:  # Tacit UTC timezone
+            _start_time = _start_time.replace(tzinfo=timezone.utc)
+        log.debug(f'Determined activity start time of {_start_time}{" (assumed UTC)" if assume_utc else ""}')
+        start_time = _start_time.timestamp()
+
+        # List activities within ±1 calendar day of start time to find the one
+        # with a matching startTime (±1 second)
+        try:
+            return next(f'{COROS_WEB_BASE}/activity-detail?labelId={a["labelId"]}&sportType={a["sportType"]}'
+                        for a in self.list_activities(start=_start_time - timedelta(days=1), end=_start_time + timedelta(days=1))
+                        if abs(a['startTime'] - start_time) < 1.0)
         except StopIteration:
-            log.warning(f'Uploaded FIT file with start_time of {start_time}, but cannot find a matching activity in Coros TC')
+            log.warning(f'Uploaded FIT file with start_time of {_start_time}, but cannot find a matching activity in Coros TC')
 
     def delete_activity(self, activity_id: str):
         r = self.session.get(COROS_API_BASE + '/activity/delete',
