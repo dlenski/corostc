@@ -1,0 +1,26 @@
+[project]
+name = "corostc"
+description = "Access Coros Training Center's web api"
+
+[project.urls]
+Homepage = "https://github.com/dlenski/corostc"
+
+[tool.poetry]
+name = "corostc"
+version = "0.0.1"
+description = "Access Coros Training Center's web api"
+authors = [ "Daniel Lenski <dlenski@gmail.com>" ]
+license = "GPLv3 or later"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+requests = "^2"
+fitparse = { git = "https://github.com/dtcooper/python-fitparse" }
+
+[tool.poetry.scripts]
+corosup = "corostc.corosup:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
