@@ -14,7 +14,7 @@ def main():
 
     if not args.username:
         print('COROS Training Center Username: ', end='')
-        args.username = read()
+        args.username = input()
     if not args.password:
         args.password = getpass('COROS Training Center Password: ')
 
