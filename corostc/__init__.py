@@ -55,6 +55,7 @@ class CorosTCClient():
         self.password = password
         self.session = None
         self.access_token = None
+        self.user_id = None
 
     @staticmethod
     def _coros_raise_or_json(r: requests.Response):
@@ -78,6 +79,7 @@ class CorosTCClient():
             account=self.username, pwd=md5(self.password.encode()).hexdigest(), accountType=2))
         j = self._coros_raise_or_json(r)
         self.session.headers['accessToken'] = j['data']['accessToken']
+        self.user_id = j['data']['userId']
 
     def list_activities(self, batch_size: int = 100,
                         start: Optional[Union[date, datetime]] = None,
