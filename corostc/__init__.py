@@ -19,6 +19,8 @@ import requests
 COROS_WEB_BASE = 'https://training.coros.com'
 COROS_API_BASE = 'https://teamapi.coros.com'
 CorosFileType = IntEnum('CorosFileType', dict(CSV=0, GPX=1, KML=2, TCX=3, FIT=4))
+
+# https://github.com/xballoy/coros-api/blob/main/src/coros/sport-type.ts#L43
 CorosSportType = IntEnum('CorosSportType', dict(
     Run=100,
     IndoorRun=101,
@@ -27,6 +29,11 @@ CorosSportType = IntEnum('CorosSportType', dict(
     MtnClimb=105,
     Bike=200,
     IndoorBike=201,
+    RoadEbike=202,
+    GravelRoadBike=203,
+    MountainRiding=204,
+    MountainEbike=205,
+    HelmetBike=299,
     PoolSwim=300,
     OpenWater=301,
     Strength=402,
@@ -42,7 +49,14 @@ CorosSportType = IntEnum('CorosSportType', dict(
     IndoorRower=701,
     Whitewater=702,
     Flatwater=704,
-    Walk=900))
+    Climb=106,
+    IndoorClimb=800,
+    Bouldering=801,
+    Walk=900,
+    JumpRope=901,
+    ClimbStairs=902,
+    CustomSport=98,
+))
 
 logging.basicConfig(level=logging.DEBUG)
 
