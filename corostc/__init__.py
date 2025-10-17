@@ -50,12 +50,12 @@ log = logging.getLogger(__name__)
 logging.getLogger('requests').setLevel(logging.ERROR)
 
 class CorosTCClient():
-    def __init__(self, username: str, password: str):
+    def __init__(self, username: Optional[str] = None, password: Optional[str] = None, accesstoken: Optional[str] = None):
         self.username = username
         self.password = password
+        self.accesstoken = accesstoken
         self.session = None
-        self.access_token = None
-        self.user_id = None
+        self.user_id = self.nickname = None
 
     @staticmethod
     def _coros_raise_or_json(r: requests.Response):
@@ -75,11 +75,30 @@ class CorosTCClient():
             self.session = None
 
     def _authenticate(self):
-        r = self.session.post(COROS_API_BASE + '/account/login', json=dict(
-            account=self.username, pwd=md5(self.password.encode()).hexdigest(), accountType=2))
-        j = self._coros_raise_or_json(r)
-        self.session.headers['accessToken'] = j['data']['accessToken']
-        self.user_id = j['data']['userId']
+        if self.accesstoken:
+            self.session.headers['accessToken'] = self.accesstoken
+            r = self.session.get(COROS_API_BASE + '/account/query')
+            try:
+                j = self._coros_raise_or_json(r)
+            except Exception as exc:
+                self.accesstoken = None
+                log.warning(f'Reauthenticating with accesstoken failed', exc_info=exc)
+
+        if self.accesstoken is None:
+            if self.username is None or self.password is None:
+                raise RuntimeError('Cannot authenticate without username and password')
+            r = self.session.post(COROS_API_BASE + '/account/login', json=dict(
+                account=self.username, pwd=md5(self.password.encode()).hexdigest(), accountType=2))
+            j = self._coros_raise_or_json(r)
+
+        data = j['data']
+        self.session.headers['accessToken'] = self.accesstoken = data['accessToken']
+        self.user_id = data['userId']
+        self.nickname = data['nickname']
+        if self.username:
+            assert self.username.lower() == data['email'].lower()
+        self.username = data['email']
+        log.debug('Authenticated to account %s (email %s, nickname %r)', self.user_id, self.username, self.nickname)
 
     def list_activities(self, batch_size: int = 100,
                         start: Optional[Union[date, datetime]] = None,
@@ -101,7 +120,7 @@ class CorosTCClient():
                 try:
                     a['_sportType'] = CorosSportType(a['sportType'])
                 except ValueError:
-                    pass   # Unknown sport type integer. Just leave it alone.
+                    log.debug('unknown sportType %r for activity %r', a['sportType'], a['labelId'])
                 a['_date'] = date(year=a['date'] // 10000, month=a['date'] // 100 % 100, day=a['date'] % 100)
                 stz = a['_startTimezone'] = timezone(timedelta(minutes=a['startTimezone']*15))
                 etz = a['_endTimezone'] = timezone(timedelta(minutes=a['endTimezone']*15))
