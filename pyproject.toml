@@ -20,6 +20,7 @@ fitparse = { git = "https://github.com/dtcooper/python-fitparse" }
 
 [tool.poetry.scripts]
 corosup = "corostc.corosup:main"
+corosdown = "corostc.corosdown:main"
 
 [build-system]
 requires = ["poetry-core"]
