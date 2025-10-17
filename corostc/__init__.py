@@ -180,7 +180,7 @@ class CorosTCClient():
         self._coros_raise_or_json(r)
 
         if not fitparse:
-            log.warning('Cannot determine activity ID in Coros TC Without python-fitparse')
+            log.warning('Cannot determine activity ID in Coros TC without python-fitparse')
             return None
 
         # Find the start time from the uploaded FIT file
@@ -202,8 +202,7 @@ class CorosTCClient():
         # List activities within ±1 calendar day of start time to find the one
         # with a matching startTime (±1 second)
         try:
-            return next(f'{COROS_WEB_BASE}/activity-detail?labelId={a["labelId"]}&sportType={a["sportType"]}'
-                        for a in self.list_activities(start=_start_time - timedelta(days=1), end=_start_time + timedelta(days=1))
+            return next(a for a in self.list_activities(start=_start_time - timedelta(days=1), end=_start_time + timedelta(days=1))
                         if abs(a['startTime'] - start_time) < 1.0)
         except StopIteration:
             log.warning(f'Uploaded FIT file with start_time of {_start_time}, but cannot find a matching activity in Coros TC')

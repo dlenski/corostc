@@ -3,7 +3,7 @@ from pprint import pprint
 from sys import stderr
 from getpass import getpass
 
-from . import CorosFileType, CorosSportType, CorosTCClient
+from . import CorosFileType, CorosSportType, CorosTCClient, COROS_WEB_BASE
 
 def main():
     p = argparse.ArgumentParser()
@@ -23,8 +23,12 @@ def main():
     client = CorosTCClient(args.username, args.password, args.accesstoken)
     client.connect()
     for fitfile in args.fitfile:
-        url = client.upload_activity(open(fitfile, 'rb'), compress=False)
-        print(f'{fitfile!r} -> {"<couldn't determine URL>" if url is None else url}')
+        a = client.upload_activity(open(fitfile, 'rb'), compress=False)
+        if a is None:
+            url = "<couldn't determine URL>"
+        else:
+            url = f'{COROS_WEB_BASE}/activity-detail?labelId={a["labelId"]}&sportType={a["sportType"]}'
+        print(f'{fitfile!r} -> {url}')
     else:
         print(f'Uploaded {len(args.fitfile)} files')
 
