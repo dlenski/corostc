@@ -10,6 +10,7 @@ def main():
     p.add_argument('-u', '--username')
     p.add_argument('-p', '--password')
     p.add_argument('-T', '--accesstoken', help='Accesstoken or CPL-coros-token cookie')
+    p.add_argument('-n', '--name', help='Activity name')
     p.add_argument('fitfile', nargs='+')
     args = p.parse_args()
 
@@ -28,6 +29,7 @@ def main():
             if a is None:
                 url = "<couldn't determine URL>"
             else:
+                client.update_activity(a["labelId"], name=args.name)
                 url = f'{COROS_WEB_BASE}/activity-detail?labelId={a["labelId"]}&sportType={a["sportType"]}'
             print(f'{fitfile!r} -> {url}')
     else:

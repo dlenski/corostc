@@ -130,7 +130,7 @@ class CorosTCClient():
                                              endDay=end and end.strftime('%Y%m%d')))
             j = self._coros_raise_or_json(r)['data']
 
-            for a in j['dataList']:
+            for a in j.get('dataList', ()):
                 try:
                     a['_sportType'] = CorosSportType(a['sportType'])
                 except ValueError:
