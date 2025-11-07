@@ -23,12 +23,13 @@ def main():
     client = CorosTCClient(args.username, args.password, args.accesstoken)
     client.connect()
     for fitfile in args.fitfile:
-        a = client.upload_activity(open(fitfile, 'rb'), compress=False)
-        if a is None:
-            url = "<couldn't determine URL>"
-        else:
-            url = f'{COROS_WEB_BASE}/activity-detail?labelId={a["labelId"]}&sportType={a["sportType"]}'
-        print(f'{fitfile!r} -> {url}')
+        with open(fitfile, 'rb') as f:
+            a = client.upload_activity(f)
+            if a is None:
+                url = "<couldn't determine URL>"
+            else:
+                url = f'{COROS_WEB_BASE}/activity-detail?labelId={a["labelId"]}&sportType={a["sportType"]}'
+            print(f'{fitfile!r} -> {url}')
     else:
         print(f'Uploaded {len(args.fitfile)} files')
 
